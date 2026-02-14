@@ -1,0 +1,345 @@
+import { useState } from "react";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CheckCircle, XCircle, Copy, Download, Brain, Sparkles, FileText } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+
+interface PredictionResult {
+  eligible: boolean;
+  confidence: number;
+  factors: { label: string; score: number; color: string }[];
+}
+
+export default function CheckEligibility() {
+  const { toast } = useToast();
+  const [result, setResult] = useState<null | PredictionResult>(null);
+  const [form, setForm] = useState({
+    employeeId: "",
+    designationRole: "",
+    educationLevel: "",
+    gender: "",
+    recruitmentChannel: "",
+    training: [75],
+    age: "",
+    previousYearRating: [4.0],
+    lengthOfService: "",
+    kpiMet: "",
+    awardsWon: "",
+    avgTrainingScore: [70],
+    certificationDone: "",
+  });
+
+  const update = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const handlePredict = () => {
+    const kpiScore = form.kpiMet === "yes" ? 40 : 10;
+    const expScore = Math.min(25, (parseInt(form.lengthOfService) || 0) * 3);
+    const ratingScore = form.previousYearRating[0] * 5;
+    const trainingScore = form.avgTrainingScore[0] * 0.1;
+    const awardsScore = form.awardsWon === "yes" ? 8 : 0;
+    const certScore = form.certificationDone === "yes" ? 5 : 0;
+    const conf = Math.min(97, Math.max(25, kpiScore + expScore + ratingScore + trainingScore + awardsScore + certScore + Math.random() * 5));
+    const rounded = Math.round(conf * 10) / 10;
+
+    setResult({
+      eligible: rounded > 60,
+      confidence: rounded,
+      factors: [
+        { label: "KPI Achievement", score: kpiScore, color: "hsl(250, 75%, 60%)" },
+        { label: "Experience", score: expScore, color: "hsl(190, 90%, 50%)" },
+        { label: "Rating", score: ratingScore, color: "hsl(160, 84%, 39%)" },
+        { label: "Training Score", score: Math.round(trainingScore * 10) / 10, color: "hsl(38, 92%, 55%)" },
+        { label: "Awards", score: awardsScore, color: "hsl(350, 80%, 60%)" },
+        { label: "Certification", score: certScore, color: "hsl(200, 95%, 55%)" },
+      ],
+    });
+  };
+
+  const handleDownloadReport = () => {
+    if (!result) return;
+    const reportLines = [
+      "═══════════════════════════════════════════════════",
+      "       PROMOSENSE AI - ELIGIBILITY REPORT          ",
+      "═══════════════════════════════════════════════════",
+      "",
+      `Report Date: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`,
+      `Report Time: ${new Date().toLocaleTimeString()}`,
+      "",
+      "───────────────── EMPLOYEE DETAILS ─────────────────",
+      "",
+      `  Employee ID:        ${form.employeeId || "N/A"}`,
+      `  Designation:        ${form.designationRole || "N/A"}`,
+      `  Education Level:    ${form.educationLevel || "N/A"}`,
+      `  Gender:             ${form.gender || "N/A"}`,
+      `  Age:                ${form.age || "N/A"}`,
+      `  Recruitment:        ${form.recruitmentChannel || "N/A"}`,
+      `  Length of Service:  ${form.lengthOfService || "N/A"} years`,
+      "",
+      "───────────────── PERFORMANCE DATA ─────────────────",
+      "",
+      `  Previous Year Rating:  ${form.previousYearRating[0].toFixed(1)} / 5.0`,
+      `  KPI Met:               ${form.kpiMet === "yes" ? "Yes ✓" : "No ✗"}`,
+      `  Awards Won:            ${form.awardsWon === "yes" ? "Yes ✓" : "No ✗"}`,
+      `  Avg Training Score:    ${form.avgTrainingScore[0]}%`,
+      `  Training Hours:        ${form.training[0]}`,
+      `  Certification:         ${form.certificationDone === "yes" ? "Completed ✓" : "Not Completed ✗"}`,
+      "",
+      "───────────────── PREDICTION RESULT ─────────────────",
+      "",
+      `  Eligibility:    ${result.eligible ? "✅ ELIGIBLE FOR PROMOTION" : "❌ NOT ELIGIBLE"}`,
+      `  Confidence:     ${result.confidence}%`,
+      "",
+      "  Factor Breakdown:",
+      ...result.factors.map(f => `    • ${f.label.padEnd(20)} ${f.score} pts`),
+      "",
+      "───────────────── AI ANALYSIS ─────────────────",
+      "",
+      result.eligible
+        ? "  The employee demonstrates strong indicators for promotion"
+        : "  Areas requiring improvement have been identified.",
+      result.eligible
+        ? "  readiness. Key strengths include KPI achievement and"
+        : "  Focus on KPI targets and increasing project",
+      result.eligible
+        ? "  consistent performance ratings."
+        : "  contributions for the next review cycle.",
+      "",
+      "═══════════════════════════════════════════════════",
+      "  Generated by PromoSense AI v2.4                  ",
+      "  © 2026 PromoSense AI. All rights reserved.       ",
+      "═══════════════════════════════════════════════════",
+    ];
+
+    const blob = new Blob([reportLines.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `eligibility-report-${form.employeeId || "employee"}-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Report Downloaded", description: "Eligibility report has been saved." });
+  };
+
+  const handleCopy = () => {
+    if (!result) return;
+    const text = `PromoSense AI Report\nEmployee: ${form.employeeId}\nEligibility: ${result.eligible ? "Eligible" : "Not Eligible"}\nConfidence: ${result.confidence}%`;
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied!", description: "Report summary copied to clipboard." });
+  };
+
+  return (
+    <DashboardLayout title="Check Eligibility">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="text-center mb-8 opacity-0 animate-fade-in-up" style={{ animationFillMode: "forwards" }}>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-xs font-medium mb-3">
+            <Sparkles className="w-3 h-3" /> AI-Powered Prediction Engine
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Promotion Eligibility Check</h2>
+          <p className="text-sm text-muted-foreground mt-1">Enter employee metrics to predict promotion eligibility</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Form - 3 cols */}
+          <div className="lg:col-span-3 glass-card p-6 space-y-5 opacity-0 animate-fade-in-up" style={{ animationDelay: "0.1s", animationFillMode: "forwards" }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Employee ID</label>
+                <Input placeholder="e.g. EMP-1042" value={form.employeeId} onChange={e => update("employeeId", e.target.value)} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Designation / Role</label>
+                <Select value={form.designationRole} onValueChange={v => update("designationRole", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select role" /></SelectTrigger>
+                  <SelectContent>
+                    {["Analyst", "Senior Analyst", "Manager", "Senior Manager", "Lead", "Director", "VP"].map(r => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Education Level</label>
+                <Select value={form.educationLevel} onValueChange={v => update("educationLevel", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select level" /></SelectTrigger>
+                  <SelectContent>
+                    {["High School", "Bachelor's", "Master's", "PhD", "Professional Degree"].map(e => (
+                      <SelectItem key={e} value={e}>{e}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Gender</label>
+                <Select value={form.gender} onValueChange={v => update("gender", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select gender" /></SelectTrigger>
+                  <SelectContent>
+                    {["Male", "Female", "Non-binary", "Prefer not to say"].map(g => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Recruitment Channel</label>
+                <Select value={form.recruitmentChannel} onValueChange={v => update("recruitmentChannel", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select channel" /></SelectTrigger>
+                  <SelectContent>
+                    {["LinkedIn", "Referral", "Campus", "Job Portal", "Agency", "Direct"].map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Age</label>
+                <Input type="number" placeholder="e.g. 32" value={form.age} onChange={e => update("age", e.target.value)} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Length of Service (years)</label>
+                <Input type="number" placeholder="e.g. 5" value={form.lengthOfService} onChange={e => update("lengthOfService", e.target.value)} className="rounded-xl" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">KPI Met (&gt;80%)</label>
+                <Select value={form.kpiMet} onValueChange={v => update("kpiMet", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Awards Won</label>
+                <Select value={form.awardsWon} onValueChange={v => update("awardsWon", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Certification Done</label>
+                <Select value={form.certificationDone} onValueChange={v => update("certificationDone", v)}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-1.5">
+                <label className="text-sm font-medium text-foreground">Previous Year Rating</label>
+                <span className="text-sm font-semibold" style={{ color: "hsl(250, 75%, 60%)" }}>{form.previousYearRating[0].toFixed(1)}/5.0</span>
+              </div>
+              <Slider value={form.previousYearRating} onValueChange={v => update("previousYearRating", v)} min={1} max={5} step={0.1} className="py-2" />
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-1.5">
+                <label className="text-sm font-medium text-foreground">Avg Training Score</label>
+                <span className="text-sm font-semibold" style={{ color: "hsl(190, 90%, 50%)" }}>{form.avgTrainingScore[0]}%</span>
+              </div>
+              <Slider value={form.avgTrainingScore} onValueChange={v => update("avgTrainingScore", v)} min={0} max={100} step={1} className="py-2" />
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-1.5">
+                <label className="text-sm font-medium text-foreground">No. of Trainings</label>
+                <span className="text-sm font-semibold" style={{ color: "hsl(160, 84%, 39%)" }}>{form.training[0]}</span>
+              </div>
+              <Slider value={form.training} onValueChange={v => update("training", v)} min={0} max={100} step={1} className="py-2" />
+            </div>
+
+            <Button
+              onClick={handlePredict}
+              className="w-full h-12 rounded-xl gradient-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity text-base"
+            >
+              <Brain className="w-5 h-5 mr-2" /> Run Prediction
+            </Button>
+          </div>
+
+          {/* Result - 2 cols */}
+          <div className="lg:col-span-2 space-y-4">
+            {!result ? (
+              <div className="glass-card p-12 flex flex-col items-center justify-center text-center h-full min-h-[300px] opacity-0 animate-fade-in-up" style={{ animationDelay: "0.15s", animationFillMode: "forwards" }}>
+                <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center mb-5">
+                  <Brain className="w-10 h-10 text-primary-foreground" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground mb-2">Ready for Prediction</h3>
+                <p className="text-sm text-muted-foreground max-w-[220px]">Fill in employee details and run prediction to see eligibility results</p>
+              </div>
+            ) : (
+              <div className="glass-card p-6 opacity-0 animate-fade-in-up" style={{ animationDelay: "0s", animationFillMode: "forwards" }}>
+                <div className="text-center mb-5">
+                  <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-3 ${
+                    result.eligible ? "gradient-cool" : "bg-destructive/10"
+                  }`}>
+                    {result.eligible ? (
+                      <CheckCircle className="w-8 h-8 text-primary-foreground" />
+                    ) : (
+                      <XCircle className="w-8 h-8 text-destructive" />
+                    )}
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground">
+                    {result.eligible ? "Eligible for Promotion" : "Not Eligible"}
+                  </h3>
+                  <span className={`inline-block text-xs font-semibold px-3 py-1 rounded-full mt-2 ${
+                    result.eligible ? "bg-accent text-accent-foreground" : "bg-destructive/10 text-destructive"
+                  }`}>
+                    {result.eligible ? "✓ PROMOTED" : "✗ NEEDS IMPROVEMENT"}
+                  </span>
+                </div>
+
+                <div className="mb-5">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-muted-foreground">Confidence Score</span>
+                    <span className="font-bold text-foreground">{result.confidence}%</span>
+                  </div>
+                  <Progress value={result.confidence} className="h-2.5 rounded-full" />
+                </div>
+
+                {/* Factor breakdown */}
+                <div className="space-y-2.5 mb-5">
+                  <h4 className="text-xs font-semibold text-foreground">Factor Breakdown</h4>
+                  {result.factors.map(f => (
+                    <div key={f.label} className="flex items-center gap-3">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: f.color }} />
+                      <span className="text-xs text-muted-foreground flex-1">{f.label}</span>
+                      <span className="text-xs font-semibold text-foreground">{f.score}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-secondary/50 rounded-xl p-4 mb-4">
+                  <h4 className="text-xs font-semibold text-foreground mb-2">AI Analysis</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {result.eligible
+                      ? "Strong performance indicators detected. KPI achievement and experience length are the primary drivers. The employee shows consistent growth trajectory and leadership readiness."
+                      : "Areas for improvement identified. Focus on meeting KPI targets, completing certifications, and increasing training scores. Consider mentorship programs for the next review cycle."}
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1 rounded-xl" onClick={handleCopy}>
+                    <Copy className="w-3 h-3 mr-1.5" /> Copy
+                  </Button>
+                  <Button size="sm" className="flex-1 rounded-xl gradient-primary text-primary-foreground hover:opacity-90" onClick={handleDownloadReport}>
+                    <Download className="w-3 h-3 mr-1.5" /> Download Report
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
